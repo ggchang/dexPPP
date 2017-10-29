@@ -37,25 +37,16 @@ def get_file_offset(memory_offset,RVA,offset):
 
 def dump_sections(pefile_path,savepath):
     pe=pefile.PE(pefile_path)
+    wf=open(savepath+"sections.txt",'a')
+    wf.write("Name     VirtSize RVA      PhysSize offset\r")
     for section in pe.sections:
-        #Name:                          .text
-        #Misc:                          0x13AD0
-        #Misc_PhysicalAddress:          0x13AD0
-        #Misc_VirtualSize:              0x13AD0
-        #VirtualAddress:                0x1000
-        #SizeOfRawData:                 0x13C00
-        #PointerToRawData:              0x400
-        #PointerToRelocations:          0x0
-        #PointerToLinenumbers:          0x0
-        #NumberOfRelocations:           0x0
-        #NumberOfLinenumbers:           0x0
-        #Characteristics:               0x60000020
         section_name = clean_section_str(section.dump()[1])
         RVA = int(clean_section_str(section.dump()[5]),16)
         VirtSize=int(clean_section_str(section.dump()[4]),16)
         SizeOfRawData=int(clean_section_str(section.dump()[6]),16)
         offset=int(clean_section_str(section.dump()[7]),16)
         dumpBIN(pefile_path,savepath+section_name+".bin",offset,SizeOfRawData)
+        wf.write(("%-8s %-8s %-8s %-8s %-8s\r")%(section_name,hex(VirtSize),hex(RVA),hex(SizeOfRawData),hex(offset)))
 
 def dump_DosHeader(pefile_path,savepath):
     pe=pefile.PE(pefile_path)
@@ -63,7 +54,12 @@ def dump_DosHeader(pefile_path,savepath):
 
 def dump_DosStub(pefile_path,savepath):
     pe=pefile.PE(pefile_path)
+    pe=pefile.PE(pefile_path)
+    wf=open(savepath+"data_directorys.txt",'a')
+    wf.write(("%-50s %-8s %-8s\r")%('name','VirtualAddress','Size'))
     dumpBIN(pefile_path,savepath+"DosStub.bin",64,176)
+    for data_dir in pe.OPTIONAL_HEADER.DATA_DIRECTORY:
+        wf.write(("%-50s %-8s %-8s\r")%(data_dir.name,data_dir.VirtualAddress,data_dir.Size))
 
 def dump_NtHeader(pefile_path):
     pe=pefile.PE(pefile_path)
@@ -105,14 +101,46 @@ def EntryPoint_dump(pefile_path,savepath,size):
     dumpBIN(pefile_path,savepath+"entrypoint_up.bin",file_offset-size,size)
     dumpBIN(pefile_path,savepath+"entrypoint_down.bin",file_offset,size)
 
+def get_imp_field(pefile_path,savepath):
+    Machine_list={'0x14c':'IMAGE_FILE_MACHINE_I386','0x8664':'IMAGE_FILE_MACHINE_AMD64',
+                '0x0':'IMAGE_FILE_MACHINE_UNKNOWN','0x1d3':'IMAGE_FILE_MACHINE_AM33'}
+    pe=pefile.PE(pefile_path)
+    wf=open(savepath+"header.hdr",'a')
+    filesize=os.path.getsize(filepath)
+    #0xFC       0x0   Machine:                       0x14C
+    #0xFE       0x2   NumberOfSections:              0x7
+    #0x100      0x4   TimeDateStamp:                 0x59AE29FC [Tue Sep 05 04:37:16 2017 UTC]
+    #0x104      0x8   PointerToSymbolTable:          0x0
+    #0x108      0xC   NumberOfSymbols:               0x0
+    #0x10C      0x10  SizeOfOptionalHeader:          0xE0
+    #0x10E      0x12  Characteristics:               0x102
+    Machine= hex(int(clean_section_str(pe.FILE_HEADER.dump()[1]),16))
+    for Mac in Machine_list:
+        if Mac==Machine:
+            machine_type=Machine_list[Mac]
+            break
+    Machine = machine_type
+    NumberOfSections=pe.FILE_HEADER.NumberOfSections
+    TimeDateStamp = pe.FILE_HEADER.dump()[3].split("[")[1].split("]")[0]
+    Characteristics = hex(int(clean_section_str(pe.FILE_HEADER.dump()[7]),16))
+    checksum=pe.OPTIONAL_HEADER.CheckSum
+    filetype = pe.FILE_HEADER.Characteristics
+    wf.write("filesize:"+str(filesize)+'\r')
+    wf.write("filetype:"+str(filetype)+'\r')
+    wf.write("TimeDateStamp:"+TimeDateStamp+'\r')
+    wf.write("CheckSum:"+hex(checksum)+'\r')
+    wf.write("Machine:"+str(Machine)+'\r')
+    wf.write("NumberOfSections:"+str(NumberOfSections)+'\r')
+
 if __name__ == '__main__':
     filepath="D:\\code\\iexplore.exe"
-    os.mkdir(filepath+'.parsed')
+    #os.mkdir(filepath+'.parsed')
     savepath=filepath+'.parsed\\'
     #dump_sections(filepath,savepath)
-    #dump_DosStub(filepath,savepath)
+    dump_DosStub(filepath,savepath)
     #dump_DosHeader(filepath,savepath)
     #dump_Overlay(filepath,savepath)
-    dump_NtHeader(filepath)
+    #dump_NtHeader(filepath)
     #parse_IAT(filepath,savepath)
-    EntryPoint_dump(filepath,savepath,200)
+    #EntryPoint_dump(filepath,savepath,200)
+    get_imp_field(filepath,savepath)
